@@ -98,17 +98,15 @@ def convert_to_csv(ncfilename, outfile):
     csvfile = os.path.join(tempdir, os.path.basename('test-123.csv'))
     with Dataset(ncfilename, 'r') as nc:
         #print nc.variables.keys()
-        print nc.variables["y_image_bounds"][:]
-            with open(csvfile, 'w') as fw:
-                writer = csv.writer(fw)
-                writer.writerow(nc.variables.keys())
+        with open(csvfile, 'w') as fw:
+            writer = csv.writer(fw)
+            writer.writerow(nc.variables.keys())
                 #for k in nc.variables.keys():
                     #print nc.variables[k][:]
                     #rad = nc.variables['Rad'][:]
                     #print rad
 
-        return csvfile
-    return None
+    return csvfile
 
 def get_objectId_at(dt, product='ABI-L1b-RadF', channel='C14'):
    import os, logging

@@ -16,7 +16,7 @@ limitations under the License.
 def create_snapshots_around_latlon(bucket, project, runner, lat, lon):
    import datetime, os
    import apache_beam as beam
-   import goes_to_jpeg as g2j
+   import goes_to_csv as g2j
 
    OUTPUT_DIR = 'gs://{}/realtime/'.format(bucket)
    options = {
@@ -36,9 +36,9 @@ def create_snapshots_around_latlon(bucket, project, runner, lat, lon):
         | 'events' >> beam.io.ReadStringsFromPubSub(subscription='projects/noaa-goes16/subscriptions/testsubscription')
         | 'filter' >> beam.FlatMap(lambda message: g2j.only_infrared(message))
         | 'to_jpg' >> beam.Map(lambda objectid: 
-            g2j.goes_to_jpeg(
+            g2j.goes_to_csv(
                 "ABI-L1b-RadM/2020/023/20/OR_ABI-L1b-RadM1-M6C11_G16_s20200232014210_e20200232014267_c20200232014306.nc",bucket,
-                'goes/{}_{}/{}'.format( lat, lon, os.path.basename(objectid).replace('.nc','.jpg') ) 
+                'goes/{}'.format(os.path.basename(objectid).replace('.nc','.csv') ) 
                 ))
    )
    job = p.run()
