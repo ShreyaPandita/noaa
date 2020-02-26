@@ -37,7 +37,7 @@ def create_snapshots_around_latlon(bucket, project, runner, lat, lon):
         | 'filter' >> beam.FlatMap(lambda message: g2j.only_infrared(message))
         | 'to_jpg' >> beam.Map(lambda objectid: 
             g2j.goes_to_jpeg(
-                "ABI-L1b-RadM/2020/023/20/OR_ABI-L1b-RadM1-M6C11_G16_s20200232014210_e20200232014267_c20200232014306.nc", lat, lon, bucket,
+                "ABI-L1b-RadM/2020/023/20/OR_ABI-L1b-RadM1-M6C11_G16_s20200232014210_e20200232014267_c20200232014306.nc",bucket,
                 'goes/{}_{}/{}'.format( lat, lon, os.path.basename(objectid).replace('.nc','.jpg') ) 
                 ))
    )
