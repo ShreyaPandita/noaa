@@ -1,0 +1,5 @@
+setup.py
+noaa.egg-info/PKG-INFO
+noaa.egg-info/SOURCES.txt
+noaa.egg-info/dependency_links.txt
+noaa.egg-info/top_level.txt

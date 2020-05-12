@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 
 """
@@ -13,49 +14,270 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-def create_snapshots_around_latlon(bucket, project, runner, lat, lon):
+######################################################################################
+#     Helper Functions                                                               #
+######################################################################################
+
+GOES_PUBLIC_BUCKET='gcp-public-data-goes-16'
+
+import apache_beam as beam
+
+def copy_fromgcs(bucket, objectId, destdir):
+   import os.path
+   import logging
+   import google.cloud.storage as gcs
+   bucket = gcs.Client().get_bucket(bucket)
+   blob = bucket.blob(objectId)
+   basename = os.path.basename(objectId)
+   logging.info('Downloading {}'.format(basename))
+   dest = os.path.join(destdir, basename)
+   blob.download_to_filename(dest)
+   return dest
+
+def copy_togcs(localfile, bucket_name, blob_name):
+   import os.path
+   import logging
+   import google.cloud.storage as gcs
+   bucket = gcs.Client().get_bucket(bucket_name)
+   blob = bucket.blob(blob_name)
+   blob.upload_from_filename(localfile)
+   logging.info('{} uploaded to gs://{}/{}'.format(localfile,
+        bucket_name, blob_name))
+   return blob
+
+
+def convert_to_csv(ncfilename):
+    import numpy as np
+    from netCDF4 import Dataset
+    import csv
+    import tempfile
+    import os.path
+
+    tempdir = tempfile.mkdtemp()
+    csvfile_path = tempdir+'test.csv'
+
+    with Dataset(ncfilename, 'r') as nc:
+        lstkeys = ["dataset_name",
+                    "platform_ID",
+                    "orbital_slot",
+                    "timeline_id",
+                    "scene_id",
+                    "band_id",
+                    "time_coverage_start",
+                    "time_coverage_end",
+                    "date_created",
+                    "geospatial_westbound_longitude",
+                    "geospatial_northbound_latitude",
+                    "geospatial_eastbound_longitude",
+                    "geospatial_southbound_latitude",
+                    "nominal_satellite_subpoint_lon",
+                    "valid_pixel_count",
+                    "missing_pixel_count",
+                    "saturated_pixel_count",
+                    "undersaturated_pixel_count",
+                    "min_radiance_value_of_valid_pixels",
+                    "max_radiance_value_of_valid_pixels",
+                    "mean_radiance_value_of_valid_pixels",
+                    "std_dev_radiance_value_of_valid_pixels",
+                    "percent_uncorrectable_l0_errors"]
+                          #"total_size",\ get it from GCS
+                          #"base_url"]
+
+        lstval = [nc.dataset_name,
+                  nc.platform_ID,
+                  nc.orbital_slot,
+                  nc.timeline_id,
+                  nc.scene_id,
+                  nc.variables['band_id'].units,
+                  nc.time_coverage_start,
+                  nc.time_coverage_end,
+                  nc.date_created,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
+                  nc.variables['nominal_satellite_subpoint_lon']._FillValue,
+                  nc.variables['valid_pixel_count'].units,
+                  nc.variables['missing_pixel_count'].units,
+                  nc.variables['saturated_pixel_count'].units,
+                  nc.variables['undersaturated_pixel_count'].units,
+                  nc.variables['min_radiance_value_of_valid_pixels'].valid_range[0],
+                  nc.variables['max_radiance_value_of_valid_pixels'].valid_range[1],
+                  nc.variables['mean_radiance_value_of_valid_pixels'].valid_range[1],
+                  nc.variables['std_dev_radiance_value_of_valid_pixels']._FillValue,
+                  nc.variables['percent_uncorrectable_L0_errors'].valid_range[0]]
+
+        with open(csvfile_path, 'w') as fw:
+            writer = csv.writer(fw)
+            writer.writerow(lstkeys)
+            writer.writerow(lstval)        
+
+    return csvfile_path
+
+def goes_to_csv(objectId, outbucket, outfilename):
+    import os, shutil, tempfile, subprocess, logging
+    import os.path
+
+    if objectId == None:
+        logging.error('Skipping GOES object creation since no GCS file specified')
+        return
+
+    tmpdir = tempfile.mkdtemp()
+    local_file = copy_fromgcs('gcp-public-data-goes-16', objectId, tmpdir)
+    logging.info('Local file copied {}'.format(os.path.basename(local_file)))
+
+    # create csv file in temporary dir, then move over to GCS 
+    csvfile = convert_to_csv(local_file)
+
+    # move over
+    if outbucket != None:
+        copy_togcs(csvfile, outbucket, outfilename)
+        outfilename = 'gs://{}/{}'.format(outbucket, outfilename)
+    else:
+        subprocess.check_call(['mv', csvfile, outfilename])
+
+    # cleanup
+    shutil.rmtree(tmpdir)
+    logging.info('Created {} from {}'.format(outfilename, os.path.basename(local_file)))
+
+    return([outfilename])
+
+
+def extract_objectid(message):
+  import json,logging
+  try:
+    # message is a string in json format, so we need to parse it as json
+    #logging.debug(message)
+    logging.info('*** In extract_objectid - the message is, {}'.format(message))
+    result = json.loads(message)
+    logging.info('*** In extract_objectid - file name is,{}'.format(result['name']))
+    yield result['name'] 
+  except:
+    import sys
+    logging.warn(sys.exc_info()[0])
+    pass
+
+def bq_load_csv(url):
+    import logging
+    from google.cloud import bigquery
+
+    logging.info('***In bq_load_csv ***')
+
+    abi_l1b_radiance = [
+        bigquery.SchemaField('dataset_name', 'STRING', mode='required'),
+        bigquery.SchemaField('platform_ID', 'STRING', mode='required'),
+        bigquery.SchemaField('orbital_slot', 'STRING', mode='required'),
+        bigquery.SchemaField('timeline_id', 'STRING', mode='required'),
+        bigquery.SchemaField('scene_id', 'STRING', mode='required'),
+        bigquery.SchemaField('band_id', 'STRING', mode='required'),
+        bigquery.SchemaField('time_coverage_start', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('time_coverage_end', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('date_created', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('geospatial_westbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_northbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_eastbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_southbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('nominal_satellite_subpoint_lon', 'FLOAT', mode='required'),
+        bigquery.SchemaField('valid_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('missing_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('saturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('undersaturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('min_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('max_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('mean_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('std_dev_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('percent_uncorrectable_l0_errors', 'FLOAT', mode='required'),
+        #bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
+        #bigquery.SchemaField('base_url', 'STRING', mode='required'),
+    ]
+
+    bigquery_client = bigquery.Client()
+    dataset_ref = bigquery_client.dataset('test')
+
+    table_ref = dataset_ref.table('abi_l1b_radiance')
+    table = bigquery.Table(table_ref,schema=abi_l1b_radiance)
+
+    if not if_table_exists(bigquery_client, table_ref): 
+        table =  bigquery_client.create_table(table)
+
+    job_config = bigquery.LoadJobConfig()
+    job_config.source_format = 'CSV'
+    job_config.skip_leading_rows = 1
+    
+
+    load_job = bigquery_client.load_table_from_uri(
+        url,
+        dataset_ref.table('abi_l1b_radiance'),
+        job_config=job_config)
+
+    assert load_job.job_type == 'load'
+    load_job.result()  # Waits for table load to complete.
+    assert load_job.state == 'DONE'
+
+    logging.info('**** Bigquery job completed ****')
+
+
+def if_table_exists(bigquery_client, table_ref):
+    from google.cloud.exceptions import NotFound
+    try:
+        bigquery_client.get_table(table_ref)
+        return True
+    except NotFound:
+        return False
+
+
+
+######################################################################################
+#     Pipeline Runner                                                                #
+######################################################################################
+
+
+def noaa_pipeline_goes16(bucket, project, runner):
+
    import datetime, os
    import apache_beam as beam
-   import goes_to_csv as g2j
+
 
    OUTPUT_DIR = 'gs://{}/realtime/'.format(bucket)
    options = {
         'staging_location': os.path.join(OUTPUT_DIR, 'tmp', 'staging'),
         'temp_location': os.path.join(OUTPUT_DIR, 'tmp'),
-        'job_name': 'seattle-' + datetime.datetime.now().strftime('%y%m%d-%H%M%S'),
+        'job_name': 'goes16-' + datetime.datetime.now().strftime('%y%m%d-%H%M%S'),
         'project': project,
         'max_num_workers': 3,
         'setup_file': './setup.py',
         'teardown_policy': 'TEARDOWN_ALWAYS',
-        'no_save_main_session': True,
+        'save_main_session': True,
         'streaming': True
    }
    opts = beam.pipeline.PipelineOptions(flags=[], **options)
    p = beam.Pipeline(runner, options=opts)
-   (p
-        | 'events' >> beam.io.ReadStringsFromPubSub(subscription='projects/noaa-goes16/subscriptions/testsubscription')
-        | 'filter' >> beam.FlatMap(lambda message: g2j.only_infrared(message))
-        | 'to_jpg' >> beam.Map(lambda objectid: 
-            g2j.goes_to_csv(
-                "ABI-L1b-RadM/2020/023/20/OR_ABI-L1b-RadM1-M6C11_G16_s20200232014210_e20200232014267_c20200232014306.nc",bucket,
-                'goes/{}'.format(os.path.basename(objectid).replace('.nc','.csv') ) 
-                ))
+   (p   | 'events' >> beam.io.ReadFromPubSub('projects/noaa-goes16/topics/demotopic')
+        | 'filter' >> beam.FlatMap(lambda message: extract_objectid(message))
+        | 'nc_to_csv' >> beam.Map(lambda objectid: 
+             goes_to_csv(
+                objectid,bucket,
+               'goes/{}'.format(os.path.basename(objectid).replace('.nc','.csv') ) 
+                )
+        | 'load_to_bq' >> beam.Map(lambda url: bq_load_csv(url))
+        )
    )
    job = p.run()
    if runner == 'DirectRunner':
       job.wait_until_finish()
+
 
 if __name__ == '__main__':
    import argparse, logging
    parser = argparse.ArgumentParser(description='Plot images at a specific location in near-real-time')
    parser.add_argument('--bucket', required=True, help='Specify GCS bucket in which to save images')
    parser.add_argument('--project',required=True, help='Specify GCP project to bill')
-   parser.add_argument('--lat', type=float, default=47.61, help='latitude of region center')
-   parser.add_argument('--lon', type=float, default=-122.33, help='longitude of region center')
+  
    
    opts = parser.parse_args()
    runner = 'DataflowRunner' # run on Cloud
    #runner = 'DirectRunner' # run Beam on local machine, but write outputs to cloud
    logging.basicConfig(level=getattr(logging, 'INFO', None))
 
-   create_snapshots_around_latlon(opts.bucket, opts.project, runner, opts.lat, opts.lon)
+   noaa_pipeline_goes16(opts.bucket, opts.project, runner)
+

@@ -1,6 +1,0 @@
-setup.py
-hurricanes.egg-info/PKG-INFO
-hurricanes.egg-info/SOURCES.txt
-hurricanes.egg-info/dependency_links.txt
-hurricanes.egg-info/requires.txt
-hurricanes.egg-info/top_level.txt

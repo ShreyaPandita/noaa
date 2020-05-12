@@ -1,5 +1,0 @@
-pyresample
-netcdf4
-matplotlib
-pillow
-google-cloud-storage

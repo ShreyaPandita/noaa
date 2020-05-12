@@ -73,8 +73,9 @@ class build(_build):  # pylint: disable=invalid-name
 # worker-startup log.
 CUSTOM_COMMANDS = [
         'apt-get update'.split(),
-        'apt-get --assume-yes install python-tk'.split()
-        ]
+        'pip install netcdf4'.split(),
+	'sudo pip install google-cloud-storage'.split(),
+]
 
 
 class CustomCommands(setuptools.Command):
@@ -108,16 +109,16 @@ class CustomCommands(setuptools.Command):
 # Note that the Python Dataflow containers come with numpy already installed
 # so this dependency will not trigger anything to be installed unless a version
 # restriction is specified.
-REQUIRED_PACKAGES = [
-    'pyresample netcdf4 matplotlib pillow google-cloud-storage'.split(),
-    ]
+#REQUIRED_PACKAGES = [
+#    'netcdf4 pillow google-cloud-storage'.split(),
+#    ]
 
 
 setuptools.setup(
-    name='hurricanes',
+    name='noaa',
     version='0.0.1',
-    description='Track the path of a hurricane',
-    install_requires=REQUIRED_PACKAGES,
+    description='Noaa pipeline',
+    #install_requires=REQUIRED_PACKAGES,
     packages=setuptools.find_packages(),
     cmdclass={
         # Command class instantiated and run during pip install scenarios.
