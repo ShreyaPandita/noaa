@@ -60,63 +60,13 @@ def convert_to_csv(ncfilename,objectId):
     logging.info('MESSAGE_FROM_PUBSUB {} '.format(MESSAGE_FROM_PUBSUB['name']))
     logging.info('MESSAGE_FROM_PUBSUB {} '.format(MESSAGE_FROM_PUBSUB['size']))
 
-    with Dataset(ncfilename, 'r') as nc:
-        lstkeys = ["dataset_name",
-                    "platform_ID",
-                    "orbital_slot",
-                    "timeline_id",
-                    "scene_id",
-                    "band_id",
-                    "time_coverage_start",
-                    "time_coverage_end",
-                    "date_created",
-                    "geospatial_westbound_longitude",
-                    "geospatial_northbound_latitude",
-                    "geospatial_eastbound_longitude",
-                    "geospatial_southbound_latitude",
-                    "nominal_satellite_subpoint_lon",
-                    "valid_pixel_count",
-                    "missing_pixel_count",
-                    "saturated_pixel_count",
-                    "undersaturated_pixel_count",
-                    "min_radiance_value_of_valid_pixels",
-                    "max_radiance_value_of_valid_pixels",
-                    "mean_radiance_value_of_valid_pixels",
-                    "std_dev_radiance_value_of_valid_pixels",
-                    "percent_uncorrectable_l0_errors",
-                    "total_size",
-                    "base_url"]
+    # Get the keys and values from nc file to be used in csv 
+    lstkeys,lstval = get_csv_key_val(ncfilename)   
 
-        lstval = [nc.dataset_name,
-                  nc.platform_ID,
-                  nc.orbital_slot,
-                  nc.timeline_id,
-                  nc.scene_id,
-                  nc.variables['band_id'].units,
-                  nc.time_coverage_start,
-                  nc.time_coverage_end,
-                  nc.date_created,
-                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
-                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
-                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
-                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
-                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
-                  nc.variables['valid_pixel_count'].getValue().tolist(),
-                  nc.variables['missing_pixel_count'].getValue().tolist(),
-                  nc.variables['saturated_pixel_count'].getValue().tolist(),
-                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
-                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
-                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
-                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
-                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
-                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
-                  MESSAGE_FROM_PUBSUB['size'],
-                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])]       
-
-        with open(csvfile_path, 'w') as fw:
-            writer = csv.writer(fw)
-            writer.writerow(lstkeys)
-            writer.writerow(lstval)        
+    with open(csvfile_path, 'w') as fw:
+        writer = csv.writer(fw)
+        writer.writerow(lstkeys)
+        writer.writerow(lstval)        
 
     return csvfile_path
 
@@ -173,7 +123,64 @@ def bq_load_csv(url):
 
     logging.info('***In bq_load_csv *** {}'.format(MESSAGE_FROM_PUBSUB))
 
-    abi_l1b_radiance = [
+    ## schema code here 
+    schema_input = bq_schema()
+
+    bigquery_client = bigquery.Client()
+    dataset_ref = bigquery_client.dataset('test')
+    job_config = bigquery.LoadJobConfig()
+    job_config.source_format = 'CSV'
+    job_config.skip_leading_rows = 1
+
+    if 'ABI-L1b' in MESSAGE_FROM_PUBSUB['name']: 
+      table_ref = dataset_ref.table('abi_l1b_radiance')
+      table = bigquery.Table(table_ref,schema=schema_input['abi_l1b_radiance'])
+
+    elif 'ABI-L2-CMIP' in MESSAGE_FROM_PUBSUB['name']:
+      table_ref = dataset_ref.table('abi_l2_cmip')
+      table = bigquery.Table(table_ref,schema=schema_input['abi_l2_cmip'])
+
+    elif 'ABI-L2-MCMIP' in MESSAGE_FROM_PUBSUB['name']:
+      table_ref = dataset_ref.table('abi_l2_mcmip')
+      table = bigquery.Table(table_ref,schema=schema_input['abi_l2_mcmip'])
+
+    elif 'GLM-L2-LCFA' in MESSAGE_FROM_PUBSUB['name']:
+      table_ref = dataset_ref.table('glm_l2_lcfa')
+      table = bigquery.Table(table_ref,schema=schema_input['glm_l2_lcfa'])
+
+    if not if_table_exists(bigquery_client, table_ref): 
+        table =  bigquery_client.create_table(table)
+
+    load_job = bigquery_client.load_table_from_uri(
+        url,
+        table_ref,
+        job_config=job_config)
+
+    assert load_job.job_type == 'load'
+    load_job.result()  # Waits for table load to complete.
+    assert load_job.state == 'DONE'
+
+    logging.info('**** Bigquery job completed ****')
+
+
+def if_table_exists(bigquery_client, table_ref):
+    from google.cloud.exceptions import NotFound
+    try:
+        bigquery_client.get_table(table_ref)
+        return True
+    except NotFound:
+        return False
+
+
+######################################################################################
+#     Schema  Functions                                                              #
+######################################################################################
+
+def bq_schema() :
+
+  from google.cloud import bigquery
+
+  abi_l1b_radiance = [
         bigquery.SchemaField('dataset_name', 'STRING', mode='required'),
         bigquery.SchemaField('platform_ID', 'STRING', mode='required'),
         bigquery.SchemaField('orbital_slot', 'STRING', mode='required'),
@@ -200,40 +207,326 @@ def bq_load_csv(url):
         bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
         bigquery.SchemaField('base_url', 'STRING', mode='required')]
 
-    bigquery_client = bigquery.Client()
-    dataset_ref = bigquery_client.dataset('test')
 
-    table_ref = dataset_ref.table('abi_l1b_radiance')
-    table = bigquery.Table(table_ref,schema=abi_l1b_radiance)
+  abi_l2_cmip = [
+        bigquery.SchemaField('platform_ID', 'STRING', mode='required'),
+        bigquery.SchemaField('orbital_slot', 'STRING', mode='required'),
+        bigquery.SchemaField('timeline_id', 'STRING', mode='required'),
+        bigquery.SchemaField('scene_id', 'STRING', mode='required'),
+        bigquery.SchemaField('band_id', 'STRING', mode='required'),
+        bigquery.SchemaField('time_coverage_start', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('time_coverage_end', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('date_created', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('geospatial_westbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_northbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_eastbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_southbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('nominal_satellite_subpoint_lon', 'FLOAT', mode='required'),
+        bigquery.SchemaField('valid_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('missing_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('saturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('undersaturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('min_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('max_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('mean_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('std_dev_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('percent_uncorrectable_l0_errors', 'FLOAT', mode='required'),
+        bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
+        bigquery.SchemaField('base_url', 'STRING', mode='required')]
 
-    if not if_table_exists(bigquery_client, table_ref): 
-        table =  bigquery_client.create_table(table)
 
-    job_config = bigquery.LoadJobConfig()
-    job_config.source_format = 'CSV'
-    job_config.skip_leading_rows = 1
-    
+  abi_l2_mcmip = [
+          bigquery.SchemaField('dataset_name', 'STRING', mode='required'),
+        bigquery.SchemaField('platform_ID', 'STRING', mode='required'),
+        bigquery.SchemaField('orbital_slot', 'STRING', mode='required'),
+        bigquery.SchemaField('timeline_id', 'STRING', mode='required'),
+        bigquery.SchemaField('scene_id', 'STRING', mode='required'),
+        bigquery.SchemaField('band_id', 'STRING', mode='required'),
+        bigquery.SchemaField('time_coverage_start', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('time_coverage_end', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('date_created', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('geospatial_westbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_northbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_eastbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_southbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('nominal_satellite_subpoint_lon', 'FLOAT', mode='required'),
+        bigquery.SchemaField('valid_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('missing_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('saturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('undersaturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('min_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('max_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('mean_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('std_dev_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('percent_uncorrectable_l0_errors', 'FLOAT', mode='required'),
+        bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
+        bigquery.SchemaField('base_url', 'STRING', mode='required')]
 
-    load_job = bigquery_client.load_table_from_uri(
-        url,
-        dataset_ref.table('abi_l1b_radiance'),
-        job_config=job_config)
+  glm_l2_lcfa = [
+        bigquery.SchemaField('dataset_name', 'STRING', mode='required'),
+        bigquery.SchemaField('platform_ID', 'STRING', mode='required'),
+        bigquery.SchemaField('orbital_slot', 'STRING', mode='required'),
+        bigquery.SchemaField('timeline_id', 'STRING', mode='required'),
+        bigquery.SchemaField('scene_id', 'STRING', mode='required'),
+        bigquery.SchemaField('band_id', 'STRING', mode='required'),
+        bigquery.SchemaField('time_coverage_start', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('time_coverage_end', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('date_created', 'TIMESTAMP', mode='required'),
+        bigquery.SchemaField('geospatial_westbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_northbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_eastbound_longitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('geospatial_southbound_latitude', 'FLOAT', mode='required'),
+        bigquery.SchemaField('nominal_satellite_subpoint_lon', 'FLOAT', mode='required'),
+        bigquery.SchemaField('valid_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('missing_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('saturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('undersaturated_pixel_count', 'INTEGER', mode='required'),
+        bigquery.SchemaField('min_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('max_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('mean_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('std_dev_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
+        bigquery.SchemaField('percent_uncorrectable_l0_errors', 'FLOAT', mode='required'),
+        bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
+        bigquery.SchemaField('base_url', 'STRING', mode='required')]
 
-    assert load_job.job_type == 'load'
-    load_job.result()  # Waits for table load to complete.
-    assert load_job.state == 'DONE'
+  noaa_schema = { 
+    'abi_l1b_radiance': abi_l1b_radiance,
+    'abi_l2_cmip': abi_l2_cmip,
+    'abi_l2_mcmip': abi_l2_mcmip,
+    'glm_l2_lcfa': glm_l2_lcfa
+  }
 
-    logging.info('**** Bigquery job completed ****')
+  return noaa_schema
 
 
-def if_table_exists(bigquery_client, table_ref):
-    from google.cloud.exceptions import NotFound
-    try:
-        bigquery_client.get_table(table_ref)
-        return True
-    except NotFound:
-        return False
+def get_csv_key_val(ncfilename):
+  from netCDF4 import Dataset
 
+  with Dataset(ncfilename, 'r') as nc:
+
+    if 'ABI-L1b' in MESSAGE_FROM_PUBSUB['name']:
+
+        abi_l1b_radiance_keys = ["dataset_name",
+                    "platform_ID",
+                    "orbital_slot",
+                    "timeline_id",
+                    "scene_id",
+                    "band_id",
+                    "time_coverage_start",
+                    "time_coverage_end",
+                    "date_created",
+                    "geospatial_westbound_longitude",
+                    "geospatial_northbound_latitude",
+                    "geospatial_eastbound_longitude",
+                    "geospatial_southbound_latitude",
+                    "nominal_satellite_subpoint_lon",
+                    "valid_pixel_count",
+                    "missing_pixel_count",
+                    "saturated_pixel_count",
+                    "undersaturated_pixel_count",
+                    "min_radiance_value_of_valid_pixels",
+                    "max_radiance_value_of_valid_pixels",
+                    "mean_radiance_value_of_valid_pixels",
+                    "std_dev_radiance_value_of_valid_pixels",
+                    "percent_uncorrectable_l0_errors",
+                    "total_size",
+                    "base_url"]
+
+        abi_l1b_radiance_val = [nc.dataset_name,
+                  nc.platform_ID,
+                  nc.orbital_slot,
+                  nc.timeline_id,
+                  nc.scene_id,
+                  nc.variables['band_id'].units,
+                  nc.time_coverage_start,
+                  nc.time_coverage_end,
+                  nc.date_created,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
+                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
+                  nc.variables['valid_pixel_count'].getValue().tolist(),
+                  nc.variables['missing_pixel_count'].getValue().tolist(),
+                  nc.variables['saturated_pixel_count'].getValue().tolist(),
+                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
+                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
+                  MESSAGE_FROM_PUBSUB['size'],
+                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])]  
+
+        return (abi_l1b_radiance_keys,abi_l1b_radiance_val)
+
+    elif 'ABI-L2-CMIP' in MESSAGE_FROM_PUBSUB['name']:
+
+        abi_l2_cmip_keys = ["dataset_name",
+                    "platform_ID",
+                    "orbital_slot",
+                    "timeline_id",
+                    "scene_id",
+                    "band_id",
+                    "time_coverage_start",
+                    "time_coverage_end",
+                    "date_created",
+                    "geospatial_westbound_longitude",
+                    "geospatial_northbound_latitude",
+                    "geospatial_eastbound_longitude",
+                    "geospatial_southbound_latitude",
+                    "nominal_satellite_subpoint_lon",
+                    "valid_pixel_count",
+                    "missing_pixel_count",
+                    "saturated_pixel_count",
+                    "undersaturated_pixel_count",
+                    "min_radiance_value_of_valid_pixels",
+                    "max_radiance_value_of_valid_pixels",
+                    "mean_radiance_value_of_valid_pixels",
+                    "std_dev_radiance_value_of_valid_pixels",
+                    "percent_uncorrectable_l0_errors",
+                    "total_size",
+                    "base_url"]
+
+        abi_l2_cmip_val = [nc.dataset_name,
+                  nc.platform_ID,
+                  nc.orbital_slot,
+                  nc.timeline_id,
+                  nc.scene_id,
+                  nc.variables['band_id'].units,
+                  nc.time_coverage_start,
+                  nc.time_coverage_end,
+                  nc.date_created,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
+                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
+                  nc.variables['valid_pixel_count'].getValue().tolist(),
+                  nc.variables['missing_pixel_count'].getValue().tolist(),
+                  nc.variables['saturated_pixel_count'].getValue().tolist(),
+                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
+                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
+                  MESSAGE_FROM_PUBSUB['size'],
+                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])] 
+
+        return (abi_l2_cmip_keys,abi_l2_cmip_val)
+
+    elif 'ABI-L2-MCMIP' in MESSAGE_FROM_PUBSUB['name']:
+
+        abi_l2_mcmip_keys = ["dataset_name",
+                    "platform_ID",
+                    "orbital_slot",
+                    "timeline_id",
+                    "scene_id",
+                    "band_id",
+                    "time_coverage_start",
+                    "time_coverage_end",
+                    "date_created",
+                    "geospatial_westbound_longitude",
+                    "geospatial_northbound_latitude",
+                    "geospatial_eastbound_longitude",
+                    "geospatial_southbound_latitude",
+                    "nominal_satellite_subpoint_lon",
+                    "valid_pixel_count",
+                    "missing_pixel_count",
+                    "saturated_pixel_count",
+                    "undersaturated_pixel_count",
+                    "min_radiance_value_of_valid_pixels",
+                    "max_radiance_value_of_valid_pixels",
+                    "mean_radiance_value_of_valid_pixels",
+                    "std_dev_radiance_value_of_valid_pixels",
+                    "percent_uncorrectable_l0_errors",
+                    "total_size",
+                    "base_url"]
+
+        abi_l2_mcmip_val = [nc.dataset_name,
+                  nc.platform_ID,
+                  nc.orbital_slot,
+                  nc.timeline_id,
+                  nc.scene_id,
+                  nc.variables['band_id'].units,
+                  nc.time_coverage_start,
+                  nc.time_coverage_end,
+                  nc.date_created,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
+                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
+                  nc.variables['valid_pixel_count'].getValue().tolist(),
+                  nc.variables['missing_pixel_count'].getValue().tolist(),
+                  nc.variables['saturated_pixel_count'].getValue().tolist(),
+                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
+                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
+                  MESSAGE_FROM_PUBSUB['size'],
+                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])] 
+
+        return (abi_l2_mcmip_keys,abi_l2_mcmip_val)
+
+    elif 'GLM-L2-LCFA' in MESSAGE_FROM_PUBSUB['name']:
+
+        glm_l2_lcfa_keys = ["dataset_name",
+                    "platform_ID",
+                    "orbital_slot",
+                    "timeline_id",
+                    "scene_id",
+                    "band_id",
+                    "time_coverage_start",
+                    "time_coverage_end",
+                    "date_created",
+                    "geospatial_westbound_longitude",
+                    "geospatial_northbound_latitude",
+                    "geospatial_eastbound_longitude",
+                    "geospatial_southbound_latitude",
+                    "nominal_satellite_subpoint_lon",
+                    "valid_pixel_count",
+                    "missing_pixel_count",
+                    "saturated_pixel_count",
+                    "undersaturated_pixel_count",
+                    "min_radiance_value_of_valid_pixels",
+                    "max_radiance_value_of_valid_pixels",
+                    "mean_radiance_value_of_valid_pixels",
+                    "std_dev_radiance_value_of_valid_pixels",
+                    "percent_uncorrectable_l0_errors",
+                    "total_size",
+                    "base_url"]
+
+        glm_l2_lcfa_val = [nc.dataset_name,
+                  nc.platform_ID,
+                  nc.orbital_slot,
+                  nc.timeline_id,
+                  nc.scene_id,
+                  nc.variables['band_id'].units,
+                  nc.time_coverage_start,
+                  nc.time_coverage_end,
+                  nc.date_created,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_westbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
+                  nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
+                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
+                  nc.variables['valid_pixel_count'].getValue().tolist(),
+                  nc.variables['missing_pixel_count'].getValue().tolist(),
+                  nc.variables['saturated_pixel_count'].getValue().tolist(),
+                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
+                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
+                  MESSAGE_FROM_PUBSUB['size'],
+                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])] 
+
+        return (glm_l2_lcfa_keys,glm_l2_lcfa_val)
 
 
 ######################################################################################
@@ -288,4 +581,6 @@ if __name__ == '__main__':
    logging.basicConfig(level=getattr(logging, 'INFO', None))
 
    noaa_pipeline_goes16(opts.bucket, opts.project, runner)
+
+
 
