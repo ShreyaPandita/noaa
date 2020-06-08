@@ -19,6 +19,7 @@ limitations under the License.
 ######################################################################################
 
 GOES_PUBLIC_BUCKET='gcp-public-data-goes-16'
+MESSAGE_FROM_PUBSUB=''
 
 import apache_beam as beam
 
@@ -46,15 +47,18 @@ def copy_togcs(localfile, bucket_name, blob_name):
    return blob
 
 
-def convert_to_csv(ncfilename):
+def convert_to_csv(ncfilename,objectId):
     import numpy as np
     from netCDF4 import Dataset
     import csv
+    import logging
     import tempfile
     import os.path
 
     tempdir = tempfile.mkdtemp()
     csvfile_path = tempdir+'test.csv'
+    logging.info('MESSAGE_FROM_PUBSUB {} '.format(MESSAGE_FROM_PUBSUB['name']))
+    logging.info('MESSAGE_FROM_PUBSUB {} '.format(MESSAGE_FROM_PUBSUB['size']))
 
     with Dataset(ncfilename, 'r') as nc:
         lstkeys = ["dataset_name",
@@ -79,9 +83,9 @@ def convert_to_csv(ncfilename):
                     "max_radiance_value_of_valid_pixels",
                     "mean_radiance_value_of_valid_pixels",
                     "std_dev_radiance_value_of_valid_pixels",
-                    "percent_uncorrectable_l0_errors"]
-                          #"total_size",\ get it from GCS
-                          #"base_url"]
+                    "percent_uncorrectable_l0_errors",
+                    "total_size",
+                    "base_url"]
 
         lstval = [nc.dataset_name,
                   nc.platform_ID,
@@ -96,16 +100,18 @@ def convert_to_csv(ncfilename):
                   nc.variables['geospatial_lat_lon_extent'].geospatial_northbound_latitude,
                   nc.variables['geospatial_lat_lon_extent'].geospatial_eastbound_longitude,
                   nc.variables['geospatial_lat_lon_extent'].geospatial_southbound_latitude,
-                  nc.variables['nominal_satellite_subpoint_lon']._FillValue,
-                  nc.variables['valid_pixel_count'].units,
-                  nc.variables['missing_pixel_count'].units,
-                  nc.variables['saturated_pixel_count'].units,
-                  nc.variables['undersaturated_pixel_count'].units,
-                  nc.variables['min_radiance_value_of_valid_pixels'].valid_range[0],
-                  nc.variables['max_radiance_value_of_valid_pixels'].valid_range[1],
-                  nc.variables['mean_radiance_value_of_valid_pixels'].valid_range[1],
-                  nc.variables['std_dev_radiance_value_of_valid_pixels']._FillValue,
-                  nc.variables['percent_uncorrectable_L0_errors'].valid_range[0]]
+                  nc.variables['nominal_satellite_subpoint_lon'].getValue().tolist(),
+                  nc.variables['valid_pixel_count'].getValue().tolist(),
+                  nc.variables['missing_pixel_count'].getValue().tolist(),
+                  nc.variables['saturated_pixel_count'].getValue().tolist(),
+                  nc.variables['undersaturated_pixel_count'].getValue().tolist(),
+                  nc.variables['min_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['max_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['mean_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['std_dev_radiance_value_of_valid_pixels'].getValue().tolist(),
+                  nc.variables['percent_uncorrectable_L0_errors'].getValue().tolist(),
+                  MESSAGE_FROM_PUBSUB['size'],
+                  'gs://gcp-public-data-goes-16/{}'.format(MESSAGE_FROM_PUBSUB['name'])]       
 
         with open(csvfile_path, 'w') as fw:
             writer = csv.writer(fw)
@@ -127,7 +133,7 @@ def goes_to_csv(objectId, outbucket, outfilename):
     logging.info('Local file copied {}'.format(os.path.basename(local_file)))
 
     # create csv file in temporary dir, then move over to GCS 
-    csvfile = convert_to_csv(local_file)
+    csvfile = convert_to_csv(local_file, objectId)
 
     # move over
     if outbucket != None:
@@ -145,12 +151,16 @@ def goes_to_csv(objectId, outbucket, outfilename):
 
 def extract_objectid(message):
   import json,logging
+  global MESSAGE_FROM_PUBSUB
+
   try:
     # message is a string in json format, so we need to parse it as json
     #logging.debug(message)
     logging.info('*** In extract_objectid - the message is, {}'.format(message))
     result = json.loads(message)
     logging.info('*** In extract_objectid - file name is,{}'.format(result['name']))
+    MESSAGE_FROM_PUBSUB = result
+    logging.info('**** MESSAGE_FROM_PUBSUB {}'.format(result['id']))
     yield result['name'] 
   except:
     import sys
@@ -161,7 +171,7 @@ def bq_load_csv(url):
     import logging
     from google.cloud import bigquery
 
-    logging.info('***In bq_load_csv ***')
+    logging.info('***In bq_load_csv *** {}'.format(MESSAGE_FROM_PUBSUB))
 
     abi_l1b_radiance = [
         bigquery.SchemaField('dataset_name', 'STRING', mode='required'),
@@ -187,9 +197,8 @@ def bq_load_csv(url):
         bigquery.SchemaField('mean_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
         bigquery.SchemaField('std_dev_radiance_value_of_valid_pixels', 'FLOAT', mode='required'),
         bigquery.SchemaField('percent_uncorrectable_l0_errors', 'FLOAT', mode='required'),
-        #bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
-        #bigquery.SchemaField('base_url', 'STRING', mode='required'),
-    ]
+        bigquery.SchemaField('total_size', 'INTEGER', mode='required'),
+        bigquery.SchemaField('base_url', 'STRING', mode='required')]
 
     bigquery_client = bigquery.Client()
     dataset_ref = bigquery_client.dataset('test')
@@ -258,9 +267,8 @@ def noaa_pipeline_goes16(bucket, project, runner):
              goes_to_csv(
                 objectid,bucket,
                'goes/{}'.format(os.path.basename(objectid).replace('.nc','.csv') ) 
-                )
+                ))
         | 'load_to_bq' >> beam.Map(lambda url: bq_load_csv(url))
-        )
    )
    job = p.run()
    if runner == 'DirectRunner':
