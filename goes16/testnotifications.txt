@@ -1,0 +1,69 @@
+# ABI-L1b-Rad
+{
+  "kind": "storage#object",
+  "id": "gcp-public-data-goes-16/ABI-L1b-RadF/2020/188/06/OR_ABI-L1b-RadF-M6C16_G16_s20201880600226_e20201880609546_c20201880610007.nc/1594016325966271",
+  "selfLink": "https://www.googleapis.com/storage/v1/b/gcp-public-data-goes-16/o/ABI-L1b-RadF%2F2020%2F188%2F06%2FOR_ABI-L1b-RadF-M6C16_G16_s20201880600226_e20201880609546_c20201880610007.nc",
+  "name": "ABI-L1b-RadF/2020/188/06/OR_ABI-L1b-RadF-M6C16_G16_s20201880600226_e20201880609546_c20201880610007.nc",
+  "bucket": "gcp-public-data-goes-16",
+  "generation": "1594016325966271",
+  "metageneration": "1",
+  "contentType": "application/octet-stream",
+  "timeCreated": "2020-07-06T06:18:45.966Z",
+  "updated": "2020-07-06T06:18:45.966Z",
+  "storageClass": "MULTI_REGIONAL",
+  "timeStorageClassUpdated": "2020-07-06T06:18:45.966Z",
+  "size": "20587829",
+  "md5Hash": "pZas62mXneW7RQt66l7rhA==",
+  "mediaLink": "https://www.googleapis.com/download/storage/v1/b/gcp-public-data-goes-16/o/ABI-L1b-RadF%2F2020%2F188%2F06%2FOR_ABI-L1b-RadF-M6C16_G16_s20201880600226_e20201880609546_c20201880610007.nc?generation=1594016325966271&alt=media",
+  "crc32c": "W/glmg==",
+  "etag": "CL+zgMf9t+oCEAE="
+}
+
+# ABI-L2-CMIPM :
+
+{
+  "kind": "storage#object",
+  "id": "gcp-public-data-goes-16/ABI-L2-CMIPM/2020/188/08/OR_ABI-L2-CMIPM2-M6C16_G16_s20201880858571_e20201880859040_c20201880859108.nc/1594026707352396",
+  "selfLink": "https://www.googleapis.com/storage/v1/b/gcp-public-data-goes-16/o/ABI-L2-CMIPM%2F2020%2F188%2F08%2FOR_ABI-L2-CMIPM2-M6C16_G16_s20201880858571_e20201880859040_c20201880859108.nc",
+  "name": "ABI-L2-CMIPM/2020/188/08/OR_ABI-L2-CMIPM2-M6C16_G16_s20201880858571_e20201880859040_c20201880859108.nc",
+  "bucket": "gcp-public-data-goes-16",
+  "generation": "1594026707352396",
+  "metageneration": "1",
+  "contentType": "application/octet-stream",
+  "timeCreated": "2020-07-06T09:11:47.352Z",
+  "updated": "2020-07-06T09:11:47.352Z",
+  "storageClass": "MULTI_REGIONAL",
+  "timeStorageClassUpdated": "2020-07-06T09:11:47.352Z",
+  "size": "276793",
+  "md5Hash": "utQoZ+5lox7VuGail7AGpw==",
+  "mediaLink": "https://www.googleapis.com/download/storage/v1/b/gcp-public-data-goes-16/o/ABI-L2-CMIPM%2F2020%2F188%2F08%2FOR_ABI-L2-CMIPM2-M6C16_G16_s20201880858571_e20201880859040_c20201880859108.nc?generation=1594026707352396&alt=media",
+  "crc32c": "OQ+LeQ==",
+  "etag": "CMz2nZ2kuOoCEAE="
+}
+
+GLM-L2-LCFA :
+
+{
+  "kind": "storage#object",
+  "id": "gcp-public-data-goes-16/GLM-L2-LCFA/2020/188/06/OR_GLM-L2-LCFA_G16_s20201880615000_e20201880615200_c20201880615225.nc/1594016681848940",
+  "selfLink": "https://www.googleapis.com/storage/v1/b/gcp-public-data-goes-16/o/GLM-L2-LCFA%2F2020%2F188%2F06%2FOR_GLM-L2-LCFA_G16_s20201880615000_e20201880615200_c20201880615225.nc",
+  "name": "GLM-L2-LCFA/2020/188/06/OR_GLM-L2-LCFA_G16_s20201880615000_e20201880615200_c20201880615225.nc",
+  "bucket": "gcp-public-data-goes-16",
+  "generation": "1594016681848940",
+  "metageneration": "1",
+  "contentType": "application/octet-stream",
+  "timeCreated": "2020-07-06T06:24:41.848Z",
+  "updated": "2020-07-06T06:24:41.848Z",
+  "storageClass": "MULTI_REGIONAL",
+  "timeStorageClassUpdated": "2020-07-06T06:24:41.848Z",
+  "size": "402048",
+  "md5Hash": "RMSqSQLAMexgVFJGzMKw7A==",
+  "mediaLink": "https://www.googleapis.com/download/storage/v1/b/gcp-public-data-goes-16/o/GLM-L2-LCFA%2F2020%2F188%2F06%2FOR_GLM-L2-LCFA_G16_s20201880615000_e20201880615200_c20201880615225.nc?generation=1594016681848940&alt=media",
+  "crc32c": "b4s/MQ==",
+  "etag": "COzg2fD+t+oCEAE="
+}
+
+
+# Irrelevant file : 
+
+{ "kind": "storage#object", "id": "gcp-public-data-goes-16/ABI-L2-DSIM/2020/100/22/OR_ABI-L2-DSIM1-M6_G16_s20201002217213_e20201002217270_c20201002218225.nc/1586470710518703", "selfLink": "https://www.googleapis.com/storage/v1/b/gcp-public-data-goes-16/o/ABI-L2-DSIM%2F2020%2F100%2F22%2FOR_ABI-L2-DSIM1-M6_G16_s20201002217213_e20201002217270_c20201002218225.nc", "name": "OR_ABI-L2-DSIM1-M6_G16_s20193391559242_e20193391559299_c20193391600255.nc", "bucket": "gcp-public-data-goes-16", "generation": "1586470710518703", "metageneration": "1", "contentType": "application/octet-stream", "timeCreated": "2020-04-09T22:18:30.518Z", "updated": "2020-04-09T22:18:30.518Z", "storageClass": "MULTI_REGIONAL", "timeStorageClassUpdated": "2020-04-09T22:18:30.518Z", "size": "174188", "md5Hash": "Yb1576/gcSQwaD6YjQkORA==", "mediaLink": "https://www.googleapis.com/download/storage/v1/b/gcp-public-data-goes-16/o/ABI-L2-DSIM%2F2020%2F100%2F22%2FOR_ABI-L2-DSIM1-M6_G16_s20201002217213_e20201002217270_c20201002218225.nc?generation=1586470710518703&alt=media", "crc32c": "pkq+/A==", "etag": "CK/Hlvmv3OgCEAE=" }
