@@ -3,16 +3,15 @@
 
 
 # Accessing GOES-16 data from your GCP envrironment 
- 
- This repository contains code to setup a streaming pipeline for transfering GOES-16 data to your local Bigquery project. 
+This repository contains code to setup a streaming pipeline for transfering GOES-16 data to your local Bigquery project. 
 
 1. Set up the pipeline environment :
-	Create a Compute Engine instance from the GCP console
-	#Git clone this repository on that machine and install the necessary software (this takes a while):
+	- Create a Compute Engine instance from the GCP console
+	- Git clone this repository on that machine and install the necessary software (this takes a while):
 	sudo apt-get install git
 	git clone https://github.com/ShreyaPandita/noaa.git
 	cd /noaa
-	# Run the install.sh script which installs local dependencies like numpy, netCDF4 etc. 
+	- Run the install.sh script which installs local dependencies like numpy, netCDF4 etc. 
 	bash install.sh
 
 
