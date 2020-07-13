@@ -20,7 +20,7 @@ Note : This code was tested on:
 Python 2.7
 Ubuntu 18.x 
 
-# Link to NOAA public storage bucket 
+2. Link to NOAA public storage bucket 
 https://pantheon.corp.google.com/storage/browser/gcp-public-data-goes-16
 
 
@@ -29,16 +29,18 @@ https://pantheon.corp.google.com/storage/browser/gcp-public-data-goes-16
 1. Create a test topic 
 gcloud pubsub topics create demotopic 
 
-# Refer pipeline Dataflow runner code in noaa_pipeline_test.py - beam.io.ReadFromPubSub subscribes to the test topic you created 
-# Modify the code to match your topic name 
+2. Refer pipeline Dataflow runner code in noaa_pipeline_test.py - beam.io.ReadFromPubSub subscribes to the test topic you created 
 
-2. Create a empty test dataset in your BigQuery project
+3. Modify the code to match your topic name 
 
-3. Run the test pipeline 
+4. Create a empty test dataset in your BigQuery project
+
+5. Run the test pipeline 
 python noaa_pipeline_test.py --bucket noaa-goes16-dummypipeline --project $(gcloud config get-value project)
 
-4. Publish test messages 
-# To test the pipeline flow - publish test notification messages to this topic from console or gcloud APIs ( refer testnotification.txt for samples )
+6. Publish test messages 
+
+7. To test the pipeline flow - publish test notification messages to this topic from console or gcloud APIs ( refer testnotification.txt for samples )
 
 5. Verify that the nc file is converted to .csv in uploded in your storage bucket, and eventually table with NOAA data gets created in your BigQuery test dataset 
 
